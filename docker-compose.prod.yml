@@ -1,0 +1,9 @@
+version: '3.9'
+
+services:
+  frontend:
+    image: ${DOCKER_HUB_USERNAME}/my-frontend:latest   # Pulled from Docker Hub
+    container_name: frontend-prod
+    ports:
+      - "4173:4173"       # vite preview default port
+    restart: unless-stopped

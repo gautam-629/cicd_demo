@@ -1,0 +1,58 @@
+# ── Production Dockerfile ────────────────────────────────────────────
+# Stage 1: Install deps, run lint, run build
+# Stage 2: Copy the built dist/ and serve it with vite preview
+#
+# Why two stages?
+# Stage 1 needs devDependencies (TypeScript, ESLint, Vite plugins)
+# Stage 2 only needs the built files + vite to serve them
+# This keeps the final image smaller and cleaner
+
+# ──────────────────────────────────────────────
+# Stage 1: Builder
+# ──────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files (cached layer if package.json unchanged)
+COPY package*.json ./
+
+# npm ci = faster + stricter version of npm install
+# Installs exact versions from package-lock.json
+# Includes devDependencies needed for build (TypeScript, Vite, ESLint)
+RUN npm ci
+
+# Copy all source code into the container
+COPY . .
+
+# Run ESLint — if any lint error exists, Docker build STOPS here
+# This means a bad push will never make it to Docker Hub or EC2
+RUN npm run lint
+
+# Run TypeScript compiler + Vite build
+# tsc -b checks types, vite build creates the dist/ folder
+RUN npm run build
+
+# ──────────────────────────────────────────────
+# Stage 2: Production Server (vite preview)
+# ──────────────────────────────────────────────
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+# Copy only package files
+COPY package*.json ./
+
+# Install ALL deps — vite is a devDependency but needed to run vite preview
+RUN npm ci
+
+# Copy the built React app from Stage 1
+# We only copy dist/ — no source code in the final image
+COPY --from=builder /app/dist ./dist
+
+# vite preview serves on port 4173 by default
+EXPOSE 4173
+
+# --host 0.0.0.0 = listen on all interfaces (required inside Docker)
+# --port 4173    = explicit port (matches EXPOSE above)
+CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4173"]

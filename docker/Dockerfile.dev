@@ -1,0 +1,25 @@
+# ── Development Dockerfile ──────────────────────────────────────────
+# Hot reload enabled — source is mounted as a volume
+# No build step needed; Vite handles everything in memory
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files first (Docker layer caching trick)
+# If package.json hasn't changed, Docker reuses the cached npm install layer
+COPY package*.json ./
+
+# Install ALL dependencies including devDependencies
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Vite dev server runs on port 5173 by default
+EXPOSE 5173
+
+# --host 0.0.0.0 makes Vite listen on all interfaces
+# Without this, Vite only listens on localhost INSIDE the container
+# and you can't reach it from your browser on the host machine
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
